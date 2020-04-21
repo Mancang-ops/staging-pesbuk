@@ -125,11 +125,11 @@ metadata:
 spec:
   rules:
 ## Service Location n Characters
-  - host: pesbuk.borjong.monster
+  - host: s-pesbuk.borjong.monster
     http:
       paths:
       - path: /
         backend:
-          serviceName: production-fb-service
+          serviceName: staging-fb-service
           servicePort: 80
 
