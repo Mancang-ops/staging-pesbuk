@@ -1,0 +1,135 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    name: staging
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-fb-service
+  namespace: staging
+  labels:
+    app: staging-fb
+    env: staging
+spec:
+  type: NodePort
+  selector:
+    app: staging-fb
+  ports:
+    - port: 80
+      protocol: TCP
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: staging-fb-configmap
+  namespace: staging
+  labels:
+    app: staging-fb
+    env: staging
+data:
+  config.php: |
+    <?php
+    $db_host = getenv("DB_HOST");
+    $db_user = getenv("DB_USER");
+    $db_pass = getenv("DB_PASS");
+    $db_name = "production";
+    try {
+    //create PDO connection
+    $db = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+    } catch(PDOException $e) {
+    //show error
+    die("Terjadi masalah: " . $e->getMessage());
+    }
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: staging-fb-secret
+  namespace: staging
+  labels:
+    app: staging-fb
+    env: staging
+type: Opaque
+data:
+  DB_USER: ZGV2b3BzY2lsc3k=
+  DB_PASS: MTIzNDU2Nzg5MA==
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-fb-deployment
+  namespace: staging
+  labels:
+    app: staging-fb
+    env: staging
+spec:
+  selector:
+    matchLabels:
+      app: staging-fb
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: staging-fb
+    spec:
+      volumes:
+        - configMap:
+            name: staging-fb-configmap
+          name: config-fb
+      containers:
+        - name: staging-fb-pod
+          image: $DOCKER_REGISTRY/$DOCKER_IMAGE_NAME:$BUILD_NUMBER
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config-fb
+              mountPath:  "/var/www/html/config.php"
+              subPath: "config.php"
+          env:  
+            - name: DB_HOST    
+              value: "database-production.cvlhrayg50qw.ap-southeast-1.rds.amazonaws.com"
+            - name: DB_USER    
+              valueFrom:       
+                secretKeyRef:
+                  name: staging-fb-secret
+                  key: DB_USER  
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: staging-fb-secret
+                  key: DB_PASS
+
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: s-ingress
+  namespace: staging
+  annotations:
+    ## Untuk menaikan batas upload file
+    nginx.org/client-max-body-size: "10m"
+    ## Memaksa jalan di https
+   # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  rules:
+## Service Location n Characters
+  - host: pesbuk.borjong.monster
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: production-fb-service
+          servicePort: 80
+
